@@ -12,7 +12,7 @@ import uvicorn
 import asyncio
 
 from virtual_devices import virtual_home
-from ai_engine import ai_engine
+from ai_engine_advanced import advanced_ai_engine as ai_engine
 from mistral_client import mistral_client
 
 app = FastAPI(title="Smart Home AI System", version="1.0.0")
@@ -172,8 +172,8 @@ async def process_ai_command(request: CommandRequest):
             
             return result
     
-    # Fallback to simple parsing
-    result = ai_engine.process_command(request.command, virtual_home)
+    # Fallback to simple parsing using rule engine
+    result = ai_engine.rule_engine.process_command(request.command, virtual_home)
     result['source'] = 'fallback'
     return result
 
@@ -343,3 +343,115 @@ if __name__ == "__main__":
     print("\n" + "=" * 60 + "\n")
     
     uvicorn.run(app, host="0.0.0.0", port=8090, log_level="info")
+
+
+# ==================== ADVANCED AI ENDPOINTS ====================
+
+@app.get("/api/ai/system/info")
+async def get_system_info():
+    """Get AI system information"""
+    info = ai_engine.get_system_info()
+    return {"success": True, "data": info}
+
+@app.get("/api/ai/system/stats")
+async def get_system_stats():
+    """Get detailed AI statistics"""
+    stats = ai_engine.get_statistics()
+    return {"success": True, "data": stats}
+
+@app.get("/api/ai/models/status")
+async def get_models_status():
+    """Get ML model status"""
+    return {
+        "success": True,
+        "data": {
+            "ml_model_loaded": bool(ai_engine.ml_engine.model),
+            "ml_available": bool(ai_engine.ml_engine.model),
+            "devices_predicted": len(ai_engine.ml_engine.device_columns) if ai_engine.ml_engine.model else 0,
+            "mistral_available": ai_engine.mistral.is_available(),
+            "mistral_model": ai_engine.mistral.model_name,
+            "rule_engine_ready": True
+        }
+    }
+
+@app.post("/api/ai/test/scenario")
+async def test_scenario(
+    temperature: float = 25,
+    humidity: float = 50,
+    motion: int = 0,
+    light_level: float = 300,
+    smoke_detected: int = 0
+):
+    """Test AI with custom scenario"""
+    
+    env_data = {
+        'temperature': temperature,
+        'humidity': humidity,
+        'motion': motion,
+        'light_level': light_level,
+        'smoke_detected': smoke_detected
+    }
+    
+    # Make decision
+    actions = ai_engine.make_decision(env_data)
+    
+    # Don't execute, just return predictions
+    return {
+        "success": True,
+        "scenario": env_data,
+        "predictions": actions,
+        "count": len(actions)
+    }
+
+@app.get("/api/ai/health")
+async def ai_health_check():
+    """Check AI system health"""
+    return {
+        "success": True,
+        "status": "healthy",
+        "components": {
+            "ml_model": "loaded" if ai_engine.ml_engine.model else "not_loaded",
+            "rule_engine": "ready",
+            "mistral": "available" if ai_engine.mistral.is_available() else "not_available",
+            "virtual_devices": "ready"
+        },
+        "timestamp": datetime.now().isoformat()
+    }
+
+# ==================== CONFIGURATION ENDPOINTS ====================
+
+@app.post("/api/ai/config/use_ml")
+async def set_use_ml(enabled: bool):
+    """Enable/disable ML models"""
+    ai_engine.use_ml = enabled
+    return {
+        "success": True,
+        "message": f"ML models {'enabled' if enabled else 'disabled'}",
+        "use_ml": ai_engine.use_ml
+    }
+
+@app.post("/api/ai/config/use_mistral")
+async def set_use_mistral(enabled: bool):
+    """Enable/disable Mistral AI"""
+    ai_engine.use_mistral = enabled
+    return {
+        "success": True,
+        "message": f"Mistral AI {'enabled' if enabled else 'disabled'}",
+        "use_mistral": ai_engine.use_mistral
+    }
+
+@app.get("/api/ai/config")
+async def get_config():
+    """Get current AI configuration"""
+    return {
+        "success": True,
+        "config": {
+            "use_ml": ai_engine.use_ml,
+            "use_mistral": ai_engine.use_mistral,
+            "emergency_use_rules": ai_engine.emergency_use_rules,
+            "auto_mode": ai_engine.auto_mode
+        }
+    }
+
+# Import datetime for health check
+from datetime import datetime

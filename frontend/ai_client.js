@@ -367,12 +367,25 @@ document.addEventListener('DOMContentLoaded', () => {
             const result = await aiClient.executeAIDecisions();
             
             if (result.success && result.executed > 0) {
-                const message = `Executed ${result.executed} AI decisions:\n` + 
-                    result.results.map(r => `- ${r.message} (${r.reason})`).join('\n');
+                let message = `Executed ${result.executed} AI decisions:\n`;
+                result.results.forEach(r => {
+                    // Get device name from the result
+                    const deviceName = r.device_id || r.device || r.rule || 'Unknown Device';
+                    const reason = r.reason || r.message || 'ML prediction';
+                    message += `- ${deviceName} turned ${r.action || 'controlled'} (${reason})\n`;
+                });
                 aiClient.addMessage(message);
                 setTimeout(() => aiClient.syncDeviceStates(), 500);
-            } else {
+            } else if (result.success && result.executed === 0) {
                 aiClient.addMessage('No actions needed at the moment.');
+            } else {
+                // Check if it's a connection error
+                if (result.error && result.error.includes('fetch')) {
+                    const errorMsg = '❌ AI Backend not running! Please start the system using START.bat';
+                    aiClient.addMessage(errorMsg);
+                } else {
+                    aiClient.addMessage('Failed to execute AI decisions. Check console for details.');
+                }
             }
         });
     }
@@ -395,7 +408,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (actions.length > 0) {
                     message += `Recommended Actions:\n`;
                     actions.forEach(a => {
-                        message += `- ${a.rule}: ${a.reason}\n`;
+                        // Get device name from device_id or use rule name
+                        const deviceName = a.device_id || a.device || a.rule || 'Unknown Device';
+                        const reason = a.reason || a.message || 'ML prediction';
+                        message += `- ${deviceName}: ${reason}\n`;
                     });
                 } else {
                     message += 'No actions recommended.';
@@ -428,7 +444,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 await aiClient.updateAutoModeStatus();
             } else {
                 console.error('Failed to toggle auto mode:', result);
-                aiClient.addMessage('Failed to toggle auto mode. Check console for details.');
+                
+                // Check if it's a connection error
+                if (result.error && result.error.includes('fetch')) {
+                    const errorMsg = '❌ AI Backend not running! Please start the system using START.bat to enable AI features.';
+                    aiClient.addMessage(errorMsg);
+                    alert('⚠️ AI Backend Not Running!\n\nPlease close all windows and run START.bat to start all servers.\n\nThe AI backend (port 8090) is required for Auto Mode and AI features.');
+                } else {
+                    aiClient.addMessage('Failed to toggle auto mode. Check console for details.');
+                }
             }
         });
     }

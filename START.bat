@@ -76,11 +76,20 @@ echo ========================================
 echo   Voice Control (NEW!):
 echo ========================================
 echo.
-echo 📍 Location: Top-right in 3D Simulation tab
-echo 🎤 Toggle: Click once = ON (green)
-echo           Click again = OFF (gray)
-echo 🔄 Continuous: No repeated clicks needed
-echo 💬 Speaks back: AI responds with voice
+echo 🎤 AUTO-START: Microphone starts automatically!
+echo 💤 WAKE WORD: Say "Hey My Home" to activate
+echo 😴 SLEEP WORD: Say "Sleep" to deactivate
+echo 🔄 ALWAYS ON: Mic listens continuously
+echo 💬 VOICE FEEDBACK: AI responds with voice
+echo.
+echo Wake Words:
+echo   - "Hey My Home"
+echo   - "Hi My Home"
+echo.
+echo Sleep Words:
+echo   - "Sleep"
+echo   - "Sleep My Home"
+echo   - "Go to Sleep"
 echo.
 echo ========================================
 echo   Dynamic Commands (NEW!):
@@ -117,9 +126,9 @@ echo    - Changes persist and sync with AI
 echo.
 echo 2. 3D Simulation Tab:
 echo    - View apartment in 3D (70%% bigger!)
-echo    - Click microphone button (top-right)
-echo    - Button GREEN = Voice ON
-echo    - Button GRAY = Voice OFF
+echo    - Microphone AUTO-STARTS in 2 seconds
+echo    - Say "Hey My Home" to wake system
+echo    - Say "Sleep" to put system to sleep
 echo    - Speak commands continuously
 echo.
 echo 3. AI Control Tab:
@@ -130,6 +139,8 @@ echo.
 echo ========================================
 echo   Voice Command Examples:
 echo ========================================
+echo.
+echo FIRST: Say "Hey My Home" to wake up!
 echo.
 echo Single Device:
 echo   - "Turn on reception light"
@@ -142,6 +153,11 @@ echo   - "Turn off everything"
 echo   - "Turn on all devices in reception"
 echo   - "Turn off all lights in room 1"
 echo   - "Turn on all AC"
+echo.
+echo To Sleep:
+echo   - "Sleep"
+echo   - "Sleep My Home"
+echo   - "Go to Sleep"
 echo.
 echo Rooms Supported:
 echo   - Reception, Kitchen, Bathroom

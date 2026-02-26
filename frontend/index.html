@@ -3,8 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Smart Home Control System</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=2.0">
 </head>
 <body>
     <canvas id="bg-canvas"></canvas>
@@ -220,6 +223,37 @@
                         </div>
                         
                         <div class="ai-panel">
+                            <h3>🎬 Test Scenarios</h3>
+                            <p style="font-size: 0.9em; opacity: 0.7; margin-bottom: 10px;">
+                                Simulate different situations and see how AI responds
+                            </p>
+                            <div class="scenarios-grid">
+                                <button class="scenario-btn fire" data-scenario="fire">
+                                    🔥 Fire Emergency
+                                </button>
+                                <button class="scenario-btn hot" data-scenario="hot">
+                                    ☀️ Hot Weather
+                                </button>
+                                <button class="scenario-btn cold" data-scenario="cold">
+                                    ❄️ Cold Weather
+                                </button>
+                                <button class="scenario-btn night" data-scenario="night">
+                                    🌙 Night Mode
+                                </button>
+                                <button class="scenario-btn morning" data-scenario="morning">
+                                    🌅 Morning Routine
+                                </button>
+                                <button class="scenario-btn away" data-scenario="away">
+                                    🚪 Leaving Home
+                                </button>
+                            </div>
+                            <button id="clear-fire-btn" class="scenario-btn" style="background: linear-gradient(135deg, #10b981, #059669); width: 100%; margin-top: 10px; display: none;">
+                                ✅ Clear Fire Emergency
+                            </button>
+                            <div id="scenario-response" class="scenario-response"></div>
+                        </div>
+                        
+                        <div class="ai-panel">
                             <h3>Chatbot Settings</h3>
                             <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
                                 <input type="checkbox" id="use-mistral-toggle" checked style="width: 20px; height: 20px;">
@@ -237,13 +271,15 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <script src="api.js"></script>
-    <script src="ai_client.js"></script>
-    <script src="voice_control.js"></script>
-    <script src="data.js"></script>
-    <script src="background.js"></script>
-    <script src="simulation.js"></script>
-    <script src="apartment3d.js"></script>
-    <script src="app.js"></script>
+    <script src="api.js?v=2.4"></script>
+    <script src="ai_client.js?v=2.4"></script>
+    <script src="voice_control.js?v=2.4"></script>
+    <script src="device_sounds.js?v=2.4"></script>
+    <script src="scenarios.js?v=2.4"></script>
+    <script src="data.js?v=2.4"></script>
+    <script src="background.js?v=2.4"></script>
+    <script src="simulation.js?v=2.4"></script>
+    <script src="apartment3d.js?v=2.4"></script>
+    <script src="app.js?v=2.4"></script>
 </body>
 </html>

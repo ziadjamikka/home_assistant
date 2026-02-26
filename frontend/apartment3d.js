@@ -173,6 +173,36 @@ class Apartment3D {
         sprite.scale.set(4, 1, 1);
         this.scene.add(sprite);
     }
+    
+    createDeviceLabel(text, x, y, z) {
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.width = 256;
+        canvas.height = 64;
+        
+        // Background with transparency
+        context.fillStyle = 'rgba(15, 23, 42, 0.8)';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Text
+        context.fillStyle = '#ffffff';
+        context.font = 'Bold 24px Arial';
+        context.textAlign = 'center';
+        context.textBaseline = 'middle';
+        context.fillText(text, 128, 32);
+        
+        const texture = new THREE.CanvasTexture(canvas);
+        const material = new THREE.SpriteMaterial({ 
+            map: texture,
+            transparent: true
+        });
+        const sprite = new THREE.Sprite(material);
+        sprite.position.set(x, y, z);
+        sprite.scale.set(1.5, 0.4, 1);
+        this.scene.add(sprite);
+        
+        return sprite;
+    }
 
     createBathroomDevices() {
         const room = this.rooms['bathroom'];
@@ -184,10 +214,12 @@ class Apartment3D {
 
     createCorridorsDevices() {
         const room = this.rooms['corridors'];
-        this.createLight('corr_main_light', room.x - 8, 4, room.z);
-        this.createLight('corr_spots', room.x - 3, 4, room.z);
-        this.createLight('corr_spots', room.x + 3, 4, room.z);
-        this.createLight('corr_spots', room.x + 8, 4, room.z);
+        // Main Light - Large single light
+        this.createMainLight('corr_main_light', room.x, 4, room.z);
+        // Spots Light - 3 small spot lights
+        this.createSpotLight('corr_spots', room.x - 6, 4, room.z - 1);
+        this.createSpotLight('corr_spots', room.x, 4, room.z + 1);
+        this.createSpotLight('corr_spots', room.x + 6, 4, room.z - 1);
         this.createFireSensor('corr_fire', room.x + 12, 4, room.z);
     }
 
@@ -228,16 +260,44 @@ class Apartment3D {
 
     createOutdoorDevices() {
         const room = this.rooms['outdoor'];
-        this.createLight('out_light', room.x - 8, 4, room.z);
-        this.createLight('out_light', room.x + 8, 4, room.z);
+        // Create two separate outdoor lights with unique IDs
+        this.createLight('out_light_1', room.x - 8, 4, room.z);
+        this.createLight('out_light_2', room.x + 8, 4, room.z);
         this.createCamera('out_camera', room.x, 4.5, room.z - 3);
         this.createDoor('out_door', room.x, 0, room.z + 3.8);
     }
 
     // Device creation methods
     createLight(id, x, y, z) {
-        // Light bulb
+        // Light bulb with realistic shape
         const geometry = new THREE.SphereGeometry(0.3, 16, 16);
+        const material = new THREE.MeshStandardMaterial({ 
+            color: 0xffffff,
+            emissive: 0x444444,
+            emissiveIntensity: 0,
+            metalness: 0.3,
+            roughness: 0.7
+        });
+        const bulb = new THREE.Mesh(geometry, material);
+        bulb.position.set(x, y, z);
+        this.scene.add(bulb);
+
+        // Point light with realistic warm color and LIMITED distance
+        const light = new THREE.PointLight(0xffd700, 0, 8, 2);  // Warm yellow, decay=2 for realism
+        light.position.set(x, y, z);
+        light.castShadow = true;
+        light.shadow.bias = -0.001;
+        this.scene.add(light);
+        
+        // Add label
+        const label = this.createDeviceLabel('Light', x, y - 0.8, z);
+
+        this.devices[id] = { mesh: bulb, light: light, label: label, type: 'light' };
+    }
+
+    createMainLight(id, x, y, z) {
+        // Large main light bulb
+        const geometry = new THREE.SphereGeometry(0.5, 32, 32);
         const material = new THREE.MeshStandardMaterial({ 
             color: 0x64748b,
             emissive: 0x64748b,
@@ -247,13 +307,44 @@ class Apartment3D {
         bulb.position.set(x, y, z);
         this.scene.add(bulb);
 
-        // Point light
-        const light = new THREE.PointLight(0xfbbf24, 0, 10);
+        // Stronger point light with LIMITED distance
+        const light = new THREE.PointLight(0xfbbf24, 0, 6);  // distance = 6 (only lights corridor)
         light.position.set(x, y, z);
         light.castShadow = true;
         this.scene.add(light);
 
-        this.devices[id] = { mesh: bulb, light: light, type: 'light' };
+        this.devices[id] = { mesh: bulb, light: light, type: 'light', isMainLight: true };
+    }
+
+    createSpotLight(id, x, y, z) {
+        // Small spot light - only create if not exists
+        if (!this.devices[id]) {
+            // Create group for all spot lights
+            this.devices[id] = { spots: [], type: 'light', isSpotGroup: true };
+        }
+
+        // Small spot bulb
+        const geometry = new THREE.ConeGeometry(0.15, 0.3, 8);
+        const material = new THREE.MeshStandardMaterial({ 
+            color: 0x64748b,
+            emissive: 0x64748b,
+            emissiveIntensity: 0
+        });
+        const spot = new THREE.Mesh(geometry, material);
+        spot.position.set(x, y, z);
+        spot.rotation.x = Math.PI;
+        this.scene.add(spot);
+
+        // Spot light with LIMITED distance and angle
+        const light = new THREE.SpotLight(0xfbbf24, 0, 5, Math.PI / 8);  // distance = 5, narrow angle
+        light.position.set(x, y, z);
+        light.target.position.set(x, 0, z);
+        light.castShadow = true;
+        this.scene.add(light);
+        this.scene.add(light.target);
+
+        // Add to spots array
+        this.devices[id].spots.push({ mesh: spot, light: light });
     }
 
     createFireSensor(id, x, y, z) {
@@ -266,8 +357,11 @@ class Apartment3D {
         const sensor = new THREE.Mesh(geometry, material);
         sensor.position.set(x, y, z);
         this.scene.add(sensor);
+        
+        // Add label
+        const label = this.createDeviceLabel('Fire Alert', x, y - 0.6, z);
 
-        this.devices[id] = { mesh: sensor, type: 'sensor' };
+        this.devices[id] = { mesh: sensor, label: label, type: 'sensor' };
     }
 
     createHeater(id, x, y, z) {
@@ -290,8 +384,11 @@ class Apartment3D {
         const element = new THREE.Mesh(elementGeometry, elementMaterial);
         element.position.set(x, y, z + 0.2);
         this.scene.add(element);
+        
+        // Add label
+        const label = this.createDeviceLabel('Heater', x, y - 0.8, z);
 
-        this.devices[id] = { mesh: heater, element: element, type: 'heater' };
+        this.devices[id] = { mesh: heater, element: element, label: label, type: 'heater' };
     }
 
     createFan(id, x, y, z) {
@@ -316,8 +413,11 @@ class Apartment3D {
         }
         blades.position.set(x, y - 0.15, z);
         this.scene.add(blades);
+        
+        // Add label
+        const label = this.createDeviceLabel('Fan', x, y - 0.8, z);
 
-        this.devices[id] = { mesh: fan, blades: blades, type: 'fan', rotation: 0 };
+        this.devices[id] = { mesh: fan, blades: blades, label: label, type: 'fan', rotation: 0 };
     }
 
     createWindow(id, x, y, z) {
@@ -331,8 +431,11 @@ class Apartment3D {
         const window = new THREE.Mesh(geometry, material);
         window.position.set(x, y, z);
         this.scene.add(window);
+        
+        // Add label
+        const label = this.createDeviceLabel('Window', x, y + 1.2, z);
 
-        this.devices[id] = { mesh: window, type: 'window' };
+        this.devices[id] = { mesh: window, label: label, type: 'window' };
     }
 
     createAC(id, x, y, z) {
@@ -356,8 +459,11 @@ class Apartment3D {
         const particles = new THREE.Points(particlesGeometry, particlesMaterial);
         particles.position.set(x, y - 0.5, z);
         this.scene.add(particles);
+        
+        // Add label
+        const label = this.createDeviceLabel('AC', x, y - 0.5, z);
 
-        this.devices[id] = { mesh: ac, particles: particles, type: 'ac' };
+        this.devices[id] = { mesh: ac, particles: particles, label: label, type: 'ac' };
     }
 
     createTV(id, x, y, z) {
@@ -380,8 +486,11 @@ class Apartment3D {
         const screen = new THREE.Mesh(screenGeometry, screenMaterial);
         screen.position.set(x, y, z + 0.1);
         this.scene.add(screen);
+        
+        // Add label
+        const label = this.createDeviceLabel('TV', x, y - 0.8, z);
 
-        this.devices[id] = { mesh: tv, screen: screen, type: 'tv' };
+        this.devices[id] = { mesh: tv, screen: screen, label: label, type: 'tv' };
     }
 
     createSoundSystem(id, x, y, z) {
@@ -398,8 +507,11 @@ class Apartment3D {
         const speaker2 = new THREE.Mesh(geometry, material);
         speaker2.position.set(x + 0.5, y, z);
         this.scene.add(speaker2);
+        
+        // Add label
+        const label = this.createDeviceLabel('Sound', x, y - 0.5, z);
 
-        this.devices[id] = { mesh: speaker1, mesh2: speaker2, type: 'sound' };
+        this.devices[id] = { mesh: speaker1, mesh2: speaker2, label: label, type: 'sound' };
     }
 
     createCamera(id, x, y, z) {
@@ -424,8 +536,11 @@ class Apartment3D {
         lens.position.set(x, y - 0.2, z + 0.2);
         lens.rotation.x = -Math.PI / 4;
         this.scene.add(lens);
+        
+        // Add label
+        const label = this.createDeviceLabel('Camera', x, y - 0.8, z);
 
-        this.devices[id] = { mesh: body, lens: lens, type: 'camera' };
+        this.devices[id] = { mesh: body, lens: lens, label: label, type: 'camera' };
     }
 
     createDoor(id, x, y, z) {
@@ -436,64 +551,226 @@ class Apartment3D {
         });
         const door = new THREE.Mesh(geometry, material);
         door.position.set(x, y + 1.5, z);
+        
+        // Add label
+        const label = this.createDeviceLabel('Door', x, y + 3.2, z);
         this.scene.add(door);
 
-        this.devices[id] = { mesh: door, type: 'door', openAngle: 0 };
+        this.devices[id] = { mesh: door, label: label, type: 'door', openAngle: 0 };
     }
 
     updateDeviceStates() {
         Object.keys(smartHomeData).forEach(roomKey => {
             smartHomeData[roomKey].devices.forEach(device => {
+                // Handle special case for out_light (controls 2 lights)
+                if (device.id === 'out_light') {
+                    const light1 = this.devices['out_light_1'];
+                    const light2 = this.devices['out_light_2'];
+                    
+                    if (light1 && light2) {
+                        // Smooth fade in/out
+                        const targetIntensity = device.status ? 2 : 0;
+                        const targetEmissive = device.status ? 1 : 0;
+                        
+                        light1.light.intensity += (targetIntensity - light1.light.intensity) * 0.1;
+                        light1.mesh.material.emissiveIntensity += (targetEmissive - light1.mesh.material.emissiveIntensity) * 0.1;
+                        light2.light.intensity += (targetIntensity - light2.light.intensity) * 0.1;
+                        light2.mesh.material.emissiveIntensity += (targetEmissive - light2.mesh.material.emissiveIntensity) * 0.1;
+                    }
+                    return;
+                }
+                
                 const deviceObj = this.devices[device.id];
                 if (!deviceObj) return;
 
                 switch (deviceObj.type) {
                     case 'light':
-                        if (device.status) {
-                            deviceObj.mesh.material.emissiveIntensity = 1;
-                            deviceObj.light.intensity = 2;
+                        // Check if it's a spot light group
+                        if (deviceObj.isSpotGroup && deviceObj.spots) {
+                            // Update all spot lights with smooth transition
+                            const targetIntensity = device.status ? 0.8 : 0;
+                            const targetEmissive = device.status ? 0.6 : 0;
+                            
+                            deviceObj.spots.forEach(spot => {
+                                spot.light.intensity += (targetIntensity - spot.light.intensity) * 0.1;
+                                spot.mesh.material.emissiveIntensity += (targetEmissive - spot.mesh.material.emissiveIntensity) * 0.1;
+                            });
+                        } else if (deviceObj.isMainLight) {
+                            // Main light with smooth fade
+                            const targetIntensity = device.status ? 2.5 : 0;
+                            const targetEmissive = device.status ? 1 : 0;
+                            
+                            deviceObj.light.intensity += (targetIntensity - deviceObj.light.intensity) * 0.1;
+                            deviceObj.mesh.material.emissiveIntensity += (targetEmissive - deviceObj.mesh.material.emissiveIntensity) * 0.1;
                         } else {
-                            deviceObj.mesh.material.emissiveIntensity = 0;
-                            deviceObj.light.intensity = 0;
+                            // Regular light with smooth fade
+                            const targetIntensity = device.status ? 1.8 : 0;
+                            const targetEmissive = device.status ? 1 : 0;
+                            
+                            deviceObj.light.intensity += (targetIntensity - deviceObj.light.intensity) * 0.1;
+                            deviceObj.mesh.material.emissiveIntensity += (targetEmissive - deviceObj.mesh.material.emissiveIntensity) * 0.1;
                         }
                         break;
 
                     case 'heater':
-                        if (device.status) {
-                            deviceObj.element.material.emissiveIntensity = 0.8;
-                        } else {
-                            deviceObj.element.material.emissiveIntensity = 0;
+                        // Smooth heating effect
+                        const targetHeaterEmissive = device.status ? 0.8 : 0;
+                        const currentHeaterEmissive = deviceObj.element.material.emissiveIntensity;
+                        deviceObj.element.material.emissiveIntensity += (targetHeaterEmissive - currentHeaterEmissive) * 0.05;
+                        
+                        // Sound effect
+                        if (typeof deviceSounds !== 'undefined') {
+                            if (device.status && currentHeaterEmissive < 0.1) {
+                                deviceSounds.playHeaterSound(device.id);
+                            } else if (!device.status && currentHeaterEmissive > 0.7) {
+                                deviceSounds.stopSound(device.id);
+                            }
                         }
                         break;
 
                     case 'fan':
+                        // Realistic fan acceleration/deceleration
                         if (device.status) {
-                            deviceObj.rotation += 0.2;
+                            if (!deviceObj.speed) deviceObj.speed = 0;
+                            deviceObj.speed = Math.min(deviceObj.speed + 0.01, 0.3); // Accelerate
+                            deviceObj.rotation += deviceObj.speed;
                             deviceObj.blades.rotation.y = deviceObj.rotation;
+                            
+                            // Sound effect
+                            if (typeof deviceSounds !== 'undefined' && deviceObj.speed > 0.05) {
+                                deviceSounds.playFanSound(device.id, deviceObj.speed);
+                            }
+                        } else {
+                            if (deviceObj.speed > 0) {
+                                deviceObj.speed = Math.max(deviceObj.speed - 0.005, 0); // Decelerate
+                                deviceObj.rotation += deviceObj.speed;
+                                deviceObj.blades.rotation.y = deviceObj.rotation;
+                                
+                                // Stop sound when fully stopped
+                                if (typeof deviceSounds !== 'undefined' && deviceObj.speed < 0.01) {
+                                    deviceSounds.stopSound(device.id);
+                                }
+                            }
                         }
                         break;
 
                     case 'window':
-                        if (device.status) {
-                            deviceObj.mesh.material.opacity = 0.8;
-                        } else {
-                            deviceObj.mesh.material.opacity = 0.3;
+                        // Smooth window opening/closing
+                        const targetOpacity = device.status ? 0.8 : 0.3;
+                        const currentOpacity = deviceObj.mesh.material.opacity;
+                        const prevOpacity = deviceObj.prevOpacity || currentOpacity;
+                        deviceObj.mesh.material.opacity += (targetOpacity - currentOpacity) * 0.05;
+                        
+                        // Sound effect on state change
+                        if (typeof deviceSounds !== 'undefined') {
+                            if (Math.abs(prevOpacity - currentOpacity) > 0.01 && Math.abs(targetOpacity - currentOpacity) > 0.1) {
+                                if (!deviceObj.soundPlayed) {
+                                    deviceSounds.playWindowSound(device.status);
+                                    deviceObj.soundPlayed = true;
+                                }
+                            } else if (Math.abs(targetOpacity - currentOpacity) < 0.05) {
+                                deviceObj.soundPlayed = false;
+                            }
                         }
+                        deviceObj.prevOpacity = currentOpacity;
                         break;
 
                     case 'ac':
-                        if (device.status) {
-                            deviceObj.particles.material.opacity = 0.6;
-                        } else {
-                            deviceObj.particles.material.opacity = 0;
+                        // Smooth AC particles fade
+                        const targetACOpacity = device.status ? 0.6 : 0;
+                        const currentACOpacity = deviceObj.particles.material.opacity;
+                        deviceObj.particles.material.opacity += (targetACOpacity - currentACOpacity) * 0.05;
+                        
+                        // Sound effect
+                        if (typeof deviceSounds !== 'undefined') {
+                            if (device.status && currentACOpacity < 0.1) {
+                                deviceSounds.playACSound(device.id);
+                            } else if (!device.status && currentACOpacity > 0.5) {
+                                deviceSounds.stopSound(device.id);
+                            }
                         }
                         break;
 
                     case 'tv':
-                        if (device.status) {
-                            deviceObj.screen.material.emissiveIntensity = 0.5;
-                        } else {
-                            deviceObj.screen.material.emissiveIntensity = 0;
+                        // Smooth TV screen fade
+                        const targetTVEmissive = device.status ? 0.5 : 0;
+                        const currentTVEmissive = deviceObj.screen.material.emissiveIntensity;
+                        deviceObj.screen.material.emissiveIntensity += (targetTVEmissive - currentTVEmissive) * 0.08;
+                        
+                        // Sound effect
+                        if (typeof deviceSounds !== 'undefined') {
+                            if (device.status && currentTVEmissive < 0.1) {
+                                deviceSounds.playTVSound(device.id);
+                            } else if (!device.status && currentTVEmissive > 0.4) {
+                                deviceSounds.stopSound(device.id);
+                            }
+                        }
+                        break;
+                    
+                    case 'sound':
+                        // Sound system
+                        if (typeof deviceSounds !== 'undefined') {
+                            if (device.status && !deviceObj.soundActive) {
+                                deviceSounds.playSoundSystem(device.id);
+                                deviceObj.soundActive = true;
+                            } else if (!device.status && deviceObj.soundActive) {
+                                deviceSounds.stopSound(device.id);
+                                deviceObj.soundActive = false;
+                            }
+                        }
+                        break;
+                    
+                    case 'sensor':
+                        // Fire alert sensor
+                        if (device.id.includes('fire')) {
+                            const targetSensorEmissive = device.status ? 1 : 0;
+                            const currentSensorEmissive = deviceObj.mesh.material.emissiveIntensity;
+                            deviceObj.mesh.material.emissiveIntensity += (targetSensorEmissive - currentSensorEmissive) * 0.1;
+                            
+                            // Track previous state
+                            if (!deviceObj.prevStatus) deviceObj.prevStatus = false;
+                            
+                            // Fire alarm sound - ONLY during fire emergency
+                            if (typeof deviceSounds !== 'undefined' && typeof window !== 'undefined') {
+                                const isFireEmergency = window.fireEmergencyActive === true;
+                                
+                                // Start alarm immediately when sensor turns ON during fire emergency
+                                if (device.status && isFireEmergency && !deviceObj.prevStatus) {
+                                    deviceSounds.playFireAlarm(device.id);
+                                    console.log(`🚨 Fire alarm started for ${device.id}`);
+                                } 
+                                // Stop alarm immediately when sensor turns OFF
+                                else if (!device.status && deviceObj.prevStatus) {
+                                    deviceSounds.stopSound(device.id);
+                                    console.log(`✅ Fire alarm stopped for ${device.id}`);
+                                }
+                                // Stop alarm if fire emergency ended
+                                else if (!isFireEmergency && deviceObj.prevStatus) {
+                                    deviceSounds.stopSound(device.id);
+                                    console.log(`✅ Fire alarm stopped (emergency ended) for ${device.id}`);
+                                }
+                            }
+                            
+                            // Update previous status
+                            deviceObj.prevStatus = device.status;
+                        }
+                        break;
+                    
+                    case 'door':
+                        // Door opening/closing
+                        const targetAngle = device.status ? Math.PI / 2 : 0;
+                        const currentAngle = deviceObj.openAngle || 0;
+                        deviceObj.openAngle += (targetAngle - currentAngle) * 0.05;
+                        deviceObj.mesh.rotation.y = deviceObj.openAngle;
+                        
+                        // Sound effect on state change
+                        if (typeof deviceSounds !== 'undefined') {
+                            if (Math.abs(targetAngle - currentAngle) > 0.1 && !deviceObj.doorSoundPlayed) {
+                                deviceSounds.playDoorSound(device.status);
+                                deviceObj.doorSoundPlayed = true;
+                            } else if (Math.abs(targetAngle - currentAngle) < 0.05) {
+                                deviceObj.doorSoundPlayed = false;
+                            }
                         }
                         break;
 
@@ -636,10 +913,6 @@ class Apartment3D {
         }
     }
 }
-
-// Initialize 3D apartment when simulation view is active
-let apartment3D = null;
-
 
 // Make Apartment3D available globally
 window.Apartment3D = Apartment3D;

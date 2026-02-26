@@ -7,10 +7,16 @@ class VoiceControl {
         this.synthesis = window.speechSynthesis;
         this.isListening = false;
         this.isEnabled = false;
+        this.isAwake = false;  // Wake word state
         this.voices = [];
+        this.restartAttempts = 0;
+        this.maxRestartAttempts = 999999; // Unlimited restarts
+        this.keepAliveInterval = null;
+        this.isSpeaking = false;
         
         this.initSpeechRecognition();
         this.initSpeechSynthesis();
+        this.startKeepAlive();
     }
     
     initSpeechRecognition() {
@@ -36,12 +42,48 @@ class VoiceControl {
         };
         
         this.recognition.onresult = (event) => {
+            // Ignore results while speaking to prevent echo
+            if (this.isSpeaking) {
+                console.log('🔇 Ignoring input while speaking...');
+                return;
+            }
+            
             const last = event.results.length - 1;
-            const transcript = event.results[last][0].transcript;
+            const transcript = event.results[last][0].transcript.toLowerCase().trim();
             const confidence = event.results[last][0].confidence;
             
             console.log(`Heard: "${transcript}" (confidence: ${confidence.toFixed(2)})`);
-            this.processVoiceCommand(transcript);
+            
+            // Check for wake word - multiple variations
+            if (transcript.includes('hey my home') || 
+                transcript.includes('hi my home') ||
+                transcript.includes('my home') ||
+                transcript.includes('home') ||
+                transcript.includes('hey home')) {
+                if (!this.isAwake) {
+                    this.isAwake = true;
+                    this.speak("Yes, I'm listening. How can I help you?");
+                    console.log('✓ System AWAKE');
+                }
+                return;
+            }
+            
+            // Check for sleep word
+            if (transcript.includes('sleep')) {
+                if (this.isAwake) {
+                    this.isAwake = false;
+                    this.speak("Going to sleep. Say Hey My Home when you need me.");
+                    console.log('✓ System SLEEPING');
+                }
+                return;
+            }
+            
+            // Process command only if awake
+            if (this.isAwake) {
+                this.processVoiceCommand(transcript);
+            } else {
+                console.log('💤 System sleeping. Say "Hey My Home" to wake up.');
+            }
         };
         
         this.recognition.onerror = (event) => {
@@ -58,24 +100,37 @@ class VoiceControl {
                 this.isEnabled = false;
                 this.updateUI('error');
                 this.speak("Microphone access denied. Please allow microphone access.");
-            } else if (event.error === 'aborted') {
-                // Restart if aborted
-                if (this.isEnabled) {
-                    console.log('Recognition aborted, restarting...');
+            } else if (event.error === 'aborted' || event.error === 'network') {
+                // Restart immediately if aborted or network error
+                if (this.isEnabled && this.restartAttempts < this.maxRestartAttempts) {
+                    this.restartAttempts++;
+                    console.log(`Recognition ${event.error}, restarting... (attempt ${this.restartAttempts})`);
+                    this.isListening = false;
                     setTimeout(() => this.startListening(), 100);
+                }
+            } else if (event.error === 'audio-capture') {
+                // Audio capture error - restart after short delay
+                if (this.isEnabled) {
+                    console.log('Audio capture error, restarting in 1 second...');
+                    this.isListening = false;
+                    setTimeout(() => this.startListening(), 1000);
                 }
             }
         };
         
         this.recognition.onend = () => {
             console.log('Voice recognition ended');
+            this.isListening = false;
             
-            // Auto-restart if still enabled
-            if (this.isEnabled && !this.isListening) {
-                console.log('Auto-restarting continuous listening...');
-                setTimeout(() => this.startListening(), 100);
+            // ALWAYS auto-restart if enabled - NEVER stop
+            if (this.isEnabled) {
+                console.log('🔄 Auto-restarting continuous listening...');
+                setTimeout(() => {
+                    if (this.isEnabled) {
+                        this.startListening();
+                    }
+                }, 100);
             } else {
-                this.isListening = false;
                 this.updateUI('idle');
             }
         };
@@ -122,9 +177,23 @@ class VoiceControl {
         
         try {
             this.recognition.start();
-            this.speak("I'm listening");
+            this.isListening = true;
+            this.restartAttempts = 0; // Reset restart counter
+            console.log('🎤 Microphone started. Waiting for "Hey My Home"...');
+            this.updateUI('listening');
         } catch (error) {
             console.error('Error starting recognition:', error);
+            // If already started, just mark as listening
+            if (error.message && error.message.includes('already started')) {
+                this.isListening = true;
+                console.log('Recognition already active');
+            } else {
+                // Retry after short delay
+                this.isListening = false;
+                if (this.isEnabled) {
+                    setTimeout(() => this.startListening(), 500);
+                }
+            }
         }
     }
     
@@ -191,16 +260,20 @@ class VoiceControl {
         
         utterance.onstart = () => {
             console.log(`Speaking: "${text}"`);
+            this.isSpeaking = true;
             this.updateUI('speaking');
         };
         
         utterance.onend = () => {
             console.log('Finished speaking');
-            this.updateUI('idle');
+            this.isSpeaking = false;
+            this.updateUI('listening');
         };
         
         utterance.onerror = (event) => {
             console.error('Speech synthesis error:', event);
+            this.isSpeaking = false;
+            this.updateUI('listening');
         };
         
         this.synthesis.speak(utterance);
@@ -210,10 +283,13 @@ class VoiceControl {
         this.isEnabled = !this.isEnabled;
         
         if (this.isEnabled) {
-            this.speak("Voice control enabled. Continuous listening mode activated.");
+            this.speak("Voice control enabled");
+            this.startKeepAlive();
             setTimeout(() => this.startListening(), 1500);
         } else {
             this.speak("Voice control disabled");
+            this.isAwake = false;
+            this.stopKeepAlive();
             this.stopListening();
             this.synthesis.cancel();
         }
@@ -285,6 +361,49 @@ class VoiceControl {
             container.removeChild(container.firstChild);
         }
     }
+    
+    // Keep-alive mechanism to prevent microphone from closing
+    startKeepAlive() {
+        // Check every 3 seconds if microphone is still active
+        this.keepAliveInterval = setInterval(() => {
+            if (this.isEnabled && !this.isListening && !this.isSpeaking) {
+                console.log('⚠️ Microphone inactive, restarting...');
+                this.startListening();
+            }
+        }, 3000);
+        
+        // Handle page visibility changes
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && this.isEnabled && !this.isListening) {
+                console.log('📱 Page visible again, ensuring microphone is active...');
+                setTimeout(() => {
+                    if (this.isEnabled && !this.isListening) {
+                        this.startListening();
+                    }
+                }, 500);
+            }
+        });
+        
+        // Handle window focus
+        window.addEventListener('focus', () => {
+            if (this.isEnabled && !this.isListening) {
+                console.log('🔍 Window focused, ensuring microphone is active...');
+                setTimeout(() => {
+                    if (this.isEnabled && !this.isListening) {
+                        this.startListening();
+                    }
+                }, 500);
+            }
+        });
+    }
+    
+    // Stop keep-alive when voice control is disabled
+    stopKeepAlive() {
+        if (this.keepAliveInterval) {
+            clearInterval(this.keepAliveInterval);
+            this.keepAliveInterval = null;
+        }
+    }
 }
 
 // Global instance
@@ -311,4 +430,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 'linear-gradient(135deg, #10b981, #059669)';
         });
     }
+    
+    // Auto-start microphone after 2 seconds
+    setTimeout(() => {
+        console.log('🎤 Auto-starting microphone...');
+        voiceControl.isEnabled = true;
+        voiceControl.startListening();
+        
+        // Update button states
+        if (voiceBtn) {
+            voiceBtn.classList.add('active', 'listening');
+        }
+        if (toggleBtn) {
+            toggleBtn.textContent = 'Disable Voice';
+            toggleBtn.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
+        }
+        
+        console.log('✓ Microphone active. Say "Hey My Home" to wake up the system.');
+    }, 2000);
 });
